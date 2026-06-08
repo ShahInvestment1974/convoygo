@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ConvoyGo — Group Fleet Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --green: #00e676;
+    --red: #ff1744;
+    --amber: #ffd600;
+    --text: #f0f4ff;
+    --muted: #6b7a99;
+    --border: rgba(255,255,255,0.07);
+    --glow: 0 0 20px rgba(0,229,255,0.15);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+
+  /* SPLASH SCREEN */
+  #splash {
+    position:fixed; inset:0; background:var(--bg); z-index:1000;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:2rem;
+  }
+  .splash-logo { font-family:'Syne',sans-serif; font-size:2.8rem; font-weight:800; color:var(--accent); letter-spacing:-1px; margin-bottom:0.3rem; }
+  .splash-logo span { color:var(--text); }
+  .splash-tagline { color:var(--muted); font-size:0.9rem; margin-bottom:3rem; letter-spacing:0.05em; text-transform:uppercase; }
+
+  .form-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:2rem; width:100%; max-width:420px;
+  }
+  .form-title { font-family:'Syne',sans-serif; font-size:1.1rem; font-weight:700; margin-bottom:1.5rem; color:var(--text); }
+  
+  .input-group { margin-bottom:1rem; }
+  .input-group label { font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; display:block; margin-bottom:0.5rem; }
+  .input-group input {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+    padding:0.85rem 1rem; color:var(--text); font-family:'DM Sans',sans-serif; font-size:1rem;
+    outline:none; transition:border-color 0.2s;
+  }
+  .input-group input:focus { border-color:var(--accent); }
+  .input-group input::placeholder { color:var(--muted); }
+
+  .tabs { display:flex; gap:0.5rem; margin-bottom:1.5rem; background:var(--surface2); border-radius:10px; padding:4px; }
+  .tab { flex:1; padding:0.6rem; border:none; border-radius:8px; background:transparent; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:0.9rem; cursor:pointer; transition:all 0.2s; }
+  .tab.active { background:var(--accent); color:#000; font-weight:600; }
+
+  .btn-primary {
+    width:100%; padding:1rem; border:none; border-radius:12px;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    color:#fff; font-family:'Syne',sans-serif; font-size:1rem; font-weight:700;
+    cursor:pointer; transition:opacity 0.2s, transform 0.1s; letter-spacing:0.03em;
+  }
+  .btn-primary:active { transform:scale(0.98); opacity:0.9; }
+  .divider { text-align:center; color:var(--muted); font-size:0.8rem; margin:1rem 0; }
+
+  /* MAIN APP */
+  #app { display:none; flex-direction:column; height:100vh; }
+
+  /* TOP BAR */
+  .topbar {
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between;
+    position:relative; z-index:100;
+  }
+  .convoy-name { font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; }
+  .room-badge {
+    background:var(--surface2); border:1px solid var(--border); border-radius:20px;
+    padding:0.3rem 0.8rem; font-size:0.75rem; color:var(--accent); font-weight:600; letter-spacing:0.05em;
+  }
+  .my-status { display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--green); }
+  .pulse { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+  /* MAP */
+  #map { flex:1; position:relative; background:#0d1520; }
+  #map-canvas { width:100%; height:100%; }
+
+  /* BOTTOM PANEL */
+  .bottom-panel {
+    background:var(--surface); border-top:1px solid var(--border);
+    max-height:45vh; overflow-y:auto;
+  }
+  .panel-header {
+    padding:1rem; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); z-index:10;
+  }
+  .panel-title { font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; }
+  .car-count { background:var(--accent); color:#000; border-radius:20px; padding:0.15rem 0.6rem; font-size:0.75rem; font-weight:700; }
+
+  .car-list { padding:0 1rem 1rem; }
+  .car-item {
+    display:flex; align-items:center; gap:0.75rem; padding:0.85rem 0;
+    border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s;
+    border-radius:10px; padding:0.85rem 0.75rem; margin:0.25rem 0;
+  }
+  .car-item:active { background:var(--surface2); }
+  .car-item.following { background:rgba(0,229,255,0.07); border:1px solid rgba(0,229,255,0.2); }
+
+  .car-avatar {
+    width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; flex-shrink:0;
+  }
+  .car-info { flex:1; min-width:0; }
+  .car-name { font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .car-meta { font-size:0.75rem; color:var(--muted); margin-top:0.2rem; }
+  .car-dist { font-size:0.8rem; font-weight:600; color:var(--accent); text-align:right; flex-shrink:0; }
+
+  .follow-btn {
+    padding:0.4rem 0.9rem; border-radius:20px; border:1px solid var(--accent);
+    background:transparent; color:var(--accent); font-size:0.75rem; font-weight:600;
+    cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; white-space:nowrap;
+  }
+  .follow-btn.active { background:var(--accent); color:#000; }
+
+  /* FOLLOW MODE OVERLAY */
+  #follow-overlay {
+    display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    background:var(--surface); border:1px solid rgba(0,229,255,0.3); border-radius:16px;
+    padding:1rem 1.5rem; text-align:center; z-index:200; box-shadow:var(--glow);
+    min-width:200px;
+  }
+  #follow-overlay.active { display:block; }
+  .follow-label { font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem; }
+  .follow-name { font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; color:var(--accent); }
+  .follow-dist { font-size:0.85rem; color:var(--text); margin-top:0.2rem; }
+  .follow-dir { font-size:2rem; margin:0.5rem 0; transition:transform 0.3s; }
+  .stop-follow { background:transparent; border:1px solid var(--red); color:var(--red); border-radius:20px; padding:0.3rem 1rem; font-size:0.75rem; cursor:pointer; font-family:'DM Sans',sans-serif; margin-top:0.5rem; }
+
+  /* COMPASS ARROW */
+  #compass {
+    display:none; position:fixed; top:80px; right:1rem;
+    width:60px; height:60px; z-index:200;
+  }
+  #compass.active { display:block; }
+  .compass-ring {
+    width:60px; height:60px; border-radius:50%;
+    background:var(--surface); border:2px solid rgba(0,229,255,0.4);
+    display:flex; align-items:center; justify-content:center; position:relative;
+    box-shadow:var(--glow);
+  }
+  .compass-arrow { font-size:1.5rem; transition:transform 0.5s ease; display:block; }
+
+  /* TOAST */
+  #toast {
+    position:fixed; bottom:5rem; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--surface2); border:1px solid var(--border); border-radius:12px;
+    padding:0.75rem 1.25rem; font-size:0.85rem; opacity:0; transition:all 0.3s; z-index:500;
+    white-space:nowrap;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* SHARE BUTTON */
+  .share-btn {
+    background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.3); border-radius:20px;
+    color:var(--green); padding:0.3rem 0.8rem; font-size:0.75rem; font-weight:600;
+    cursor:pointer; font-family:'DM Sans',sans-serif;
+  }
+
+  /* ME indicator */
+  .me-tag { font-size:0.65rem; background:var(--accent2); color:#fff; border-radius:4px; padding:1px 5px; margin-left:4px; }
+
+  .status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .status-online { background:var(--green); }
+  .status-offline { background:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- SPLASH / JOIN SCREEN -->
+<div id="splash">
+  <div class="splash-logo">Convoy<span>Go</span></div>
+  <div class="splash-tagline">Group Fleet Tracker</div>
+
+  <div class="form-card">
+    <div class="tabs" id="tab-bar">
+      <button class="tab active" onclick="switchTab('join')">Join Convoy</button>
+      <button class="tab" id="create-tab" onclick="switchTab('create')" style="display:none;">Create New</button>
+    </div>
+
+    <div id="join-form">
+      <div class="form-title">Join your group</div>
+      <div class="input-group">
+        <label>Your Name</label>
+        <input type="text" id="join-name" placeholder="e.g. Khyati Shah" maxlength="20">
+      </div>
+      <div class="input-group">
+        <label>Room Code</label>
+        <input type="text" id="join-code" placeholder="e.g. SHAH2025" maxlength="10" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <button class="btn-primary" onclick="joinConvoy()">🚗 Join Convoy</button>
+    </div>
+
+    <div id="create-form" style="display:none;">
+      <div class="form-title">Start a new convoy</div>
+      <div class="input-group">
+        <label>Your Name</label>
+        <input type="text" id="create-name" placeholder="e.g. Khyati Shah" maxlength="20">
+      </div>
+      <div class="input-group">
+        <label>Convoy Name</label>
+        <input type="text" id="create-convoy" placeholder="e.g. Bajipura Trip" maxlength="25">
+      </div>
+      <div class="input-group">
+        <label>Room Code (share with others)</label>
+        <input type="text" id="create-code" placeholder="e.g. SHAH2025" maxlength="10" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <button class="btn-primary" onclick="createConvoy()">🚀 Start Convoy</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="convoy-name" id="top-convoy-name">Convoy</div>
+      <div class="my-status"><div class="pulse"></div> <span id="top-my-name">You</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;">
+      <div class="room-badge" id="top-room-code">----</div>
+      <button class="share-btn" onclick="shareLink()">Share 🔗</button>
+      <button id="end-btn" onclick="confirmEndConvoy()" style="display:none;background:rgba(255,23,68,0.15);border:1px solid rgba(255,23,68,0.4);border-radius:20px;color:#ff1744;padding:0.3rem 0.8rem;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;">End 🚫</button>
+    </div>
+  </div>
+
+  <div id="map"><div id="map-canvas"></div></div>
+  <div id="ended-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;"><div style="font-size:4rem;margin-bottom:1rem;">🏁</div><div style="font-family:Syne,sans-serif;font-size:1.5rem;font-weight:800;color:#ff1744;margin-bottom:0.5rem;">Convoy Ended</div><div style="color:#6b7a99;font-size:0.9rem;margin-bottom:2rem;">Trip khatam ho gayi!</div><button onclick="location.reload()" style="background:linear-gradient(135deg,#00e5ff,#7c3aed);border:none;border-radius:12px;color:#fff;padding:1rem 2rem;font-family:Syne,sans-serif;font-size:1rem;font-weight:700;cursor:pointer;">New Convoy 🚗</button></div>
+
+  <div id="follow-overlay">
+    <div class="follow-label">Following</div>
+    <div class="follow-name" id="follow-target-name">—</div>
+    <div class="follow-dir" id="follow-arrow">⬆️</div>
+    <div class="follow-dist" id="follow-dist-text">Calculating...</div>
+    <button class="stop-follow" onclick="stopFollow()">✕ Stop Following</button>
+  </div>
+
+  <div id="compass">
+    <div class="compass-ring">
+      <span class="compass-arrow" id="compass-arrow">⬆️</span>
+    </div>
+  </div>
+
+  <div class="bottom-panel">
+    <div class="panel-header">
+      <div class="panel-title">In this Convoy</div>
+      <div class="car-count" id="car-count-badge">0</div>
+    </div>
+    <div class="car-list" id="car-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+// ==================== CONFIG ====================
+const FIREBASE_URL = "https://car-tracker-6b36e-default-rtdb.asia-southeast1.firebasedatabase.app";
+const MAPS_KEY = "AIzaSyBvT8g8YDIZHQPJEBuXZOjSfEnOggpYanM";
+
+const firebaseConfig = { databaseURL: FIREBASE_URL };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ==================== STATE ====================
+let myId = 'user_' + Math.random().toString(36).substr(2,9);
+let myName = '';
+let roomCode = '';
+let convoyName = '';
+let myLat = null, myLng = null;
+let followingId = null;
+let members = {};
+let map = null;
+let markers = {};
+let watchId = null;
+let directionsRenderer = null;
+let directionsService = null;
+
+
+// ==================== ADMIN CHECK ====================
+window.addEventListener("DOMContentLoaded", () => {
+  const isAdmin = new URLSearchParams(window.location.search).get("admin") === "true";
+  if (isAdmin) {
+    document.getElementById("create-tab").style.display = "block";
+  }
+});
+
+// ==================== TAB SWITCH ====================
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('join-form').style.display = tab === 'join' ? 'block' : 'none';
+  document.getElementById('create-form').style.display = tab === 'create' ? 'block' : 'none';
+}
+
+// ==================== JOIN / CREATE ====================
+function createConvoy() {
+  myName = document.getElementById('create-name').value.trim();
+  convoyName = document.getElementById('create-convoy').value.trim();
+  roomCode = document.getElementById('create-code').value.trim().toUpperCase();
+  if (!myName || !convoyName || !roomCode) { showToast('Sab fields bharo!'); return; }
+  startApp();
+}
+
+function joinConvoy() {
+  myName = document.getElementById('join-name').value.trim();
+  roomCode = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!myName || !roomCode) { showToast('Naam aur room code dono bharo!'); return; }
+  convoyName = roomCode + ' Convoy';
+  // fetch convoy name from firebase
+  db.ref('convoys/' + roomCode + '/name').once('value').then(snap => {
+    if (snap.val()) convoyName = snap.val();
+    startApp();
+  });
+}
+
+function startApp() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('top-convoy-name').textContent = convoyName;
+  document.getElementById('top-my-name').textContent = myName;
+  document.getElementById('top-room-code').textContent = roomCode;
+
+  // Save convoy name
+  db.ref('convoys/' + roomCode + '/name').set(convoyName);
+
+  loadGoogleMaps();
+  startGPS();
+  listenMembers();
+  listenConvoyStatus();
+  // Show end button for admin
+  const isAdmin = new URLSearchParams(window.location.search).get("admin") === "true";
+  if (isAdmin) document.getElementById("end-btn").style.display = "block";
+}
+
+// ==================== GOOGLE MAPS ====================
+function loadGoogleMaps() {
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&callback=initMap`;
+  script.async = true;
+  document.head.appendChild(script);
+}
+
+window.initMap = function() {
+  map = new google.maps.Map(document.getElementById('map-canvas'), {
+    center: { lat: 21.1702, lng: 72.8311 }, // Surat default
+    zoom: 13,
+    mapId: 'DEMO_MAP_ID',
+    disableDefaultUI: true,
+    zoomControl: true,
+    styles: [
+      { elementType:'geometry', stylers:[{color:'#0d1520'}] },
+      { elementType:'labels.text.fill', stylers:[{color:'#6b7a99'}] },
+      { elementType:'labels.text.stroke', stylers:[{color:'#0d1520'}] },
+      { featureType:'road', elementType:'geometry', stylers:[{color:'#1a2235'}] },
+      { featureType:'road', elementType:'geometry.stroke', stylers:[{color:'#111827'}] },
+      { featureType:'road.highway', elementType:'geometry', stylers:[{color:'#1e3a5f'}] },
+      { featureType:'water', elementType:'geometry', stylers:[{color:'#060d18'}] },
+      { featureType:'poi', stylers:[{visibility:'off'}] },
+      { featureType:'transit', stylers:[{visibility:'off'}] },
+    ]
+  });
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    suppressMarkers: true,
+    polylineOptions: { strokeColor:'#00e5ff', strokeOpacity:0.8, strokeWeight:4 }
+  });
+  directionsRenderer.setMap(map);
+}
+
+// ==================== GPS ====================
+function startGPS() {
+  if (!navigator.geolocation) { showToast('GPS available nahi hai!'); return; }
+  watchId = navigator.geolocation.watchPosition(pos => {
+    myLat = pos.coords.latitude;
+    myLng = pos.coords.longitude;
+    pushMyLocation();
+    if (followingId && members[followingId]) updateFollowInfo();
+  }, err => {
+    showToast('GPS error: ' + err.message);
+  }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+}
+
+function pushMyLocation() {
+  db.ref('convoys/' + roomCode + '/members/' + myId).set({
+    name: myName,
+    lat: myLat,
+    lng: myLng,
+    ts: Date.now(),
+    online: true
+  });
+  // cleanup on disconnect
+  db.ref('convoys/' + roomCode + '/members/' + myId + '/online').onDisconnect().set(false);
+}
+
+// ==================== LISTEN MEMBERS ====================
+function listenMembers() {
+  db.ref('convoys/' + roomCode + '/members').on('value', snap => {
+    members = snap.val() || {};
+    renderCarList();
+    updateMapMarkers();
+  });
+}
+
+const COLORS = ['#00e5ff','#7c3aed','#00e676','#ffd600','#ff6d00','#e040fb','#ff1744','#00bcd4','#69f0ae','#ffab40'];
+
+function getColor(id) {
+  const ids = Object.keys(members);
+  return COLORS[ids.indexOf(id) % COLORS.length];
+}
+
+function renderCarList() {
+  const list = document.getElementById('car-list');
+  const count = Object.keys(members).length;
+  document.getElementById('car-count-badge').textContent = count;
+  list.innerHTML = '';
+  Object.entries(members).forEach(([id, m]) => {
+    const isMe = id === myId;
+    const isFollowing = id === followingId;
+    const online = m.online !== false && (Date.now() - m.ts) < 30000;
+    const dist = (myLat && m.lat && !isMe) ? getDistance(myLat, myLng, m.lat, m.lng) : null;
+    const color = getColor(id);
+    const initials = m.name.split(' ').map(w=>w[0]).join('').toUpperCase().substr(0,2);
+
+    const div = document.createElement('div');
+    div.className = 'car-item' + (isFollowing ? ' following' : '');
+    div.innerHTML = `
+      <div class="car-avatar" style="background:${color}22;color:${color}">${initials}</div>
+      <div class="car-info">
+        <div class="car-name">${m.name}${isMe ? '<span class="me-tag">ME</span>' : ''}</div>
+        <div class="car-meta">
+          <span class="status-dot ${online ? 'status-online' : 'status-offline'}" style="display:inline-block;vertical-align:middle;margin-right:4px;"></span>
+          ${online ? 'Live' : 'Last seen ' + timeAgo(m.ts)}
+        </div>
+      </div>
+      ${dist !== null ? `<div class="car-dist">${formatDist(dist)}</div>` : ''}
+      ${!isMe ? `<button class="follow-btn ${isFollowing ? 'active' : ''}" onclick="toggleFollow('${id}','${m.name}')">${isFollowing ? '✓ Following' : 'Follow'}</button>` : ''}
+    `;
+    if (m.lat && !isMe) div.onclick = (e) => { if(e.target.classList.contains('follow-btn')) return; panToMember(m); };
+    list.appendChild(div);
+  });
+}
+
+function updateMapMarkers() {
+  if (!map) return;
+  const bounds = new google.maps.LatLngBounds();
+  let hasPoints = false;
+
+  Object.entries(members).forEach(([id, m]) => {
+    if (!m.lat || !m.lng) return;
+    hasPoints = true;
+    const color = getColor(id);
+    const isMe = id === myId;
+    const pos = { lat: m.lat, lng: m.lng };
+
+    const carIcon = {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56">
+          <rect x="2" y="2" width="44" height="28" rx="8" fill="${color}" stroke="white" stroke-width="2"/>
+          <text x="24" y="22" text-anchor="middle" font-size="20" font-family="Arial">🚗</text>
+          <rect x="0" y="32" width="48" height="22" rx="6" fill="${color}" opacity="0.95"/>
+          <text x="24" y="47" text-anchor="middle" font-size="10" font-family="Arial" font-weight="bold" fill="white">${m.name.split(' ')[0].substring(0,8)}</text>
+        </svg>
+      `)}`,
+      scaledSize: new google.maps.Size(48, 56),
+      anchor: new google.maps.Point(24, 28)
+    };
+    if (markers[id]) {
+      markers[id].setPosition(pos);
+      markers[id].setIcon(carIcon);
+    } else {
+      markers[id] = new google.maps.Marker({ 
+        position: pos, 
+        map, 
+        icon: carIcon,
+        title: m.name,
+        zIndex: isMe ? 999 : 1
+      });
+    }
+    bounds.extend(pos);
+  });
+
+  if (hasPoints && !followingId) {
+    map.fitBounds(bounds, { top: 60, bottom: 300, left: 20, right: 20 });
+  }
+}
+
+function panToMember(m) {
+  if (map && m.lat) map.panTo({ lat: m.lat, lng: m.lng });
+}
+
+// ==================== FOLLOW MODE ====================
+function toggleFollow(id, name) {
+  if (followingId === id) { stopFollow(); return; }
+  followingId = id;
+  document.getElementById('follow-overlay').classList.add('active');
+  document.getElementById('compass').classList.add('active');
+  document.getElementById('follow-target-name').textContent = name;
+  renderCarList();
+  updateFollowInfo();
+  showToast('Following ' + name);
+}
+
+function stopFollow() {
+  followingId = null;
+  document.getElementById('follow-overlay').classList.remove('active');
+  document.getElementById('compass').classList.remove('active');
+  if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+  renderCarList();
+}
+
+function updateFollowInfo() {
+  if (!followingId || !members[followingId] || !myLat) return;
+  const target = members[followingId];
+  if (!target.lat) return;
+
+  const dist = getDistance(myLat, myLng, target.lat, target.lng);
+  const bearing = getBearing(myLat, myLng, target.lat, target.lng);
+  const arrow = bearingToArrow(bearing);
+
+  document.getElementById('follow-dist-text').textContent = formatDist(dist) + ' away';
+  document.getElementById('follow-arrow').textContent = arrow;
+  document.getElementById('compass-arrow').textContent = arrow;
+
+  // Get directions
+  if (dist > 0.05) {
+    directionsService.route({
+      origin: { lat: myLat, lng: myLng },
+      destination: { lat: target.lat, lng: target.lng },
+      travelMode: google.maps.TravelMode.DRIVING
+    }, (result, status) => {
+      if (status === 'OK') {
+        directionsRenderer.setDirections(result);
+        const step = result.routes[0].legs[0].steps[0];
+        document.getElementById('follow-dist-text').textContent = step.instructions.replace(/<[^>]*>/g,'') + ' · ' + formatDist(dist);
+      }
+    });
+  }
+}
+
+// ==================== UTILS ====================
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getBearing(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const y = Math.sin(dLng)*Math.cos(lat2*Math.PI/180);
+  const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLng);
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+
+function bearingToArrow(b) {
+  const arrows = ['⬆️','↗️','➡️','↘️','⬇️','↙️','⬅️','↖️'];
+  return arrows[Math.round(b/45) % 8];
+}
+
+function formatDist(km) {
+  return km < 1 ? Math.round(km*1000) + ' m' : km.toFixed(1) + ' km';
+}
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function shareLink() {
+  const text = `ConvoyGo mein join karo! 🚗\nRoom Code: *${roomCode}*\nApp: ${window.location.href}`;
+  if (navigator.share) {
+    navigator.share({ title: 'ConvoyGo', text });
+  } else {
+    navigator.clipboard.writeText(text);
+    showToast('Link copied! WhatsApp pe bhejo 📋');
+  }
+}
+
+function confirmEndConvoy() {
+  if (confirm("Convoy end karna chahte ho? Sab ke phone pe trip khatam ho jayegi!")) {
+    db.ref("convoys/" + roomCode + "/status").set("ended");
+    showEndedOverlay();
+  }
+}
+
+function showEndedOverlay() {
+  const overlay = document.getElementById("ended-overlay");
+  overlay.style.display = "flex";
+}
+
+// Listen for convoy end
+function listenConvoyStatus() {
+  db.ref("convoys/" + roomCode + "/status").on("value", snap => {
+    if (snap.val() === "ended") showEndedOverlay();
+  });
+}
+
+// Cleanup
+window.addEventListener('beforeunload', () => {
+  if (roomCode && myId) db.ref('convoys/' + roomCode + '/members/' + myId + '/online').set(false);
+});
+</script>
+</body>
+</html>
